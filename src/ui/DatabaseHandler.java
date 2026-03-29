@@ -41,7 +41,6 @@ public class DatabaseHandler {
         }
     }
 
-    // New Update Method
     public static void updateStudent(int id, String name, String dob, String dept, String marks) {
         String sql = "UPDATE students SET Name=?, DOB=?, Department=?, Marks=? WHERE StudentID=?";
         try (Connection conn = DriverManager.getConnection(URL, USER, PASS);
@@ -70,7 +69,6 @@ public class DatabaseHandler {
 
     public static List<StudentRow> getAllStudents() {
         List<StudentRow> students = new ArrayList<>();
-        // Added StudentID to the SELECT query
         String sql = "SELECT StudentID, Name, DOB, Department, Marks FROM students";
         try (Connection conn = DriverManager.getConnection(URL, USER, PASS);
              Statement stmt = conn.createStatement();
@@ -85,7 +83,6 @@ public class DatabaseHandler {
                 double m = (marks != null && !marks.isEmpty()) ? Double.parseDouble(marks) : 0;
                 String grade = (m >= 90) ? "A" : (m >= 75) ? "B" : (m >= 60) ? "C" : "D";
 
-                // Pass the ID to the StudentRow constructor
                 students.add(new StudentRow(id, name, dob, dept, marks, grade));
             }
         } catch (SQLException e) {
