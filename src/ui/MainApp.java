@@ -26,14 +26,12 @@ public class MainApp extends Application {
         Label title = new Label("Student Tracker Pro Dashboard");
         title.getStyleClass().add("title-label");
 
-        // Input Fields
         TextField nameField = new TextField(); nameField.setPromptText("Name");
         TextField dobField = new TextField(); dobField.setPromptText("DOB (YYYY-MM-DD)");
         TextField deptField = new TextField(); deptField.setPromptText("Department");
         TextField marksField = new TextField(); marksField.setPromptText("Marks");
         TextField searchField = new TextField(); searchField.setPromptText("🔍 Search students...");
 
-        // Table Setup
         ObservableList<StudentRow> masterData = FXCollections.observableArrayList(DatabaseHandler.getAllStudents());
         FilteredList<StudentRow> filteredData = new FilteredList<>(masterData, p -> true);
         TableView<StudentRow> table = new TableView<>();
@@ -55,19 +53,16 @@ public class MainApp extends Application {
         table.getColumns().setAll(nameCol, dobCol, deptCol, marksCol, gradeCol);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Chart & Stats
         gradeChart = new PieChart();
         gradeChart.setTitle("Performance Overview");
         Label avgLabel = new Label(); Label highLabel = new Label(); Label lowLabel = new Label();
         avgLabel.getStyleClass().add("stats-label"); highLabel.getStyleClass().add("stats-label"); lowLabel.getStyleClass().add("stats-label");
 
-        // Buttons
         Button addButton = new Button("Add Student");
         Button clearFieldsButton = new Button("Clear Fields");
         Button deleteButton = new Button("Delete Selected");
         deleteButton.getStyleClass().add("button-danger");
 
-        // --- DOUBLE CLICK TO EDIT ---
         table.setRowFactory(tv -> {
             TableRow<StudentRow> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -84,13 +79,11 @@ public class MainApp extends Application {
             return row;
         });
 
-        // --- SEARCH LOGIC ---
         searchField.textProperty().addListener((obs, old, newVal) -> {
             filteredData.setPredicate(s -> newVal == null || newVal.isEmpty() ||
                     s.nameProperty().get().toLowerCase().contains(newVal.toLowerCase()));
         });
 
-        // --- ADD / UPDATE ACTION ---
         addButton.setOnAction(e -> {
             String name = nameField.getText(), dob = dobField.getText(), dept = deptField.getText(), mTxt = marksField.getText();
             if (name.isEmpty() || mTxt.isEmpty()) {
@@ -107,11 +100,9 @@ public class MainApp extends Application {
                     DatabaseHandler.addStudent(name, dob, dept, mTxt, g);
                 }
 
-                // Refresh full list to keep UI and DB IDs in sync
                 masterData.setAll(DatabaseHandler.getAllStudents());
                 updateDashboard(table, avgLabel, highLabel, lowLabel);
 
-                // Reset UI
                 selectedStudent = null;
                 addButton.setText("Add Student");
                 addButton.setStyle("");
@@ -135,7 +126,6 @@ public class MainApp extends Application {
             }
         });
 
-        // --- LAYOUT ---
         HBox inputRow = new HBox(10, nameField, dobField, deptField, marksField);
         HBox buttonRow = new HBox(10, addButton, clearFieldsButton, deleteButton);
         HBox contentRow = new HBox(20, table, gradeChart);
@@ -144,7 +134,6 @@ public class MainApp extends Application {
 
         Scene scene = new Scene(root, 1150, 750);
 
-        // --- KEYBOARD SHORTCUT (ENTER KEY) ---
         scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.ENTER) {
                 addButton.fire();
