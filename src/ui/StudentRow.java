@@ -10,7 +10,6 @@ public class StudentRow {
     private final StringProperty marks;
     private final StringProperty grade;
 
-    // Use this single constructor for everything
     public StudentRow(int id, String name, String dob, String department, String marks, String grade) {
         this.id = new SimpleIntegerProperty(id);
         this.name = new SimpleStringProperty(name);
@@ -20,7 +19,6 @@ public class StudentRow {
         this.grade = new SimpleStringProperty(grade);
     }
 
-    // Property getters for JavaFX TableView
     public IntegerProperty idProperty() { return id; }
     public StringProperty nameProperty() { return name; }
     public StringProperty dobProperty() { return dob; }
