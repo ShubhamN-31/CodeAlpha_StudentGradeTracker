@@ -22,5 +22,8 @@ A robust **Full-Stack JavaFX** application built for educators to track student 
 3.  **Drivers:** Ensure the `mysql-connector-java` JAR is added to your project libraries.
 4.  **Run:** Execute `MainApp.java` to launch the dashboard.
 
-## 📸 Dashboard Preview
-*(Tip: You can upload your screenshot to GitHub and link it here to show off the UI!)*
+## 📊 Project Preview
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ShubhamN-31/CodeAlpha_StudentGradeTracker/master/tracker.png" width="600"/>
+</p>
