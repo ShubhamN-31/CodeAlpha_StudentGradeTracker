@@ -4,45 +4,38 @@ import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+import javafx.collections.transformation.SortedList;
 import javafx.scene.Scene;
+import javafx.scene.chart.PieChart;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import javafx.collections.transformation.SortedList;
-import java.io.FileWriter;
-import java.io.IOException;
-import javafx.stage.FileChooser;
-import java.io.File;
-
 
 public class MainApp extends Application {
 
+    private PieChart gradeChart;
+    private StudentRow selectedStudent = null;
+
     @Override
     public void start(Stage stage) {
+        DatabaseHandler.setupDatabase();
 
-        Label title = new Label("Student Grade Tracker");
-        title.setMaxWidth(Double.MAX_VALUE);
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        Label title = new Label("Student Tracker Pro Dashboard");
+        title.getStyleClass().add("title-label");
 
-        final StudentRow[] selectedRow = {null};
+        // Input Fields
+        TextField nameField = new TextField(); nameField.setPromptText("Name");
+        TextField dobField = new TextField(); dobField.setPromptText("DOB (YYYY-MM-DD)");
+        TextField deptField = new TextField(); deptField.setPromptText("Department");
+        TextField marksField = new TextField(); marksField.setPromptText("Marks");
+        TextField searchField = new TextField(); searchField.setPromptText("🔍 Search students...");
 
-        TextField nameField = new TextField();
-        nameField.setPromptText("Enter student name");
-
-        TextField marksField = new TextField();
-        marksField.setPromptText("Enter marks");
-
-        TextField searchField = new TextField();
-        searchField.setPromptText("Search by name...");
-
-        ObservableList<StudentRow> masterData =
-                FXCollections.observableArrayList();
-
-        FilteredList<StudentRow> filteredData =
-                new FilteredList<>(masterData, p -> true);
-
-
+        // Table Setup
+        ObservableList<StudentRow> masterData = FXCollections.observableArrayList(DatabaseHandler.getAllStudents());
+        FilteredList<StudentRow> filteredData = new FilteredList<>(masterData, p -> true);
         TableView<StudentRow> table = new TableView<>();
         SortedList<StudentRow> sortedData = new SortedList<>(filteredData);
         sortedData.comparatorProperty().bind(table.comparatorProperty());
@@ -50,218 +43,150 @@ public class MainApp extends Application {
 
         TableColumn<StudentRow, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(data -> data.getValue().nameProperty());
-
+        TableColumn<StudentRow, String> dobCol = new TableColumn<>("DOB");
+        dobCol.setCellValueFactory(data -> data.getValue().dobProperty());
+        TableColumn<StudentRow, String> deptCol = new TableColumn<>("Dept");
+        deptCol.setCellValueFactory(data -> data.getValue().departmentProperty());
         TableColumn<StudentRow, String> marksCol = new TableColumn<>("Marks");
         marksCol.setCellValueFactory(data -> data.getValue().marksProperty());
-
         TableColumn<StudentRow, String> gradeCol = new TableColumn<>("Grade");
         gradeCol.setCellValueFactory(data -> data.getValue().gradeProperty());
 
-        table.getColumns().addAll(nameCol, marksCol, gradeCol);
+        table.getColumns().setAll(nameCol, dobCol, deptCol, marksCol, gradeCol);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(250);
 
-        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
-            filteredData.setPredicate(student -> {
+        // Chart & Stats
+        gradeChart = new PieChart();
+        gradeChart.setTitle("Performance Overview");
+        Label avgLabel = new Label(); Label highLabel = new Label(); Label lowLabel = new Label();
+        avgLabel.getStyleClass().add("stats-label"); highLabel.getStyleClass().add("stats-label"); lowLabel.getStyleClass().add("stats-label");
 
-                if (newValue == null || newValue.isEmpty()) {
-                    return true;
-                }
-
-                String lowerCaseFilter = newValue.toLowerCase();
-
-                return student.nameProperty().get().toLowerCase().contains(lowerCaseFilter);
-            });
-        });
-        Label averageLabel = new Label("Average: 0");
-        Label highestLabel = new Label("Highest: 0");
-        Label lowestLabel = new Label("Lowest: 0");
-
-        HBox statsBox = new HBox(20, averageLabel, highestLabel, lowestLabel);
+        // Buttons
         Button addButton = new Button("Add Student");
+        Button clearFieldsButton = new Button("Clear Fields");
         Button deleteButton = new Button("Delete Selected");
-        Button clearAllButton = new Button("Clear All");
-        Button exportButton = new Button("Export CSV");
+        deleteButton.getStyleClass().add("button-danger");
 
-        addButton.setOnAction(e -> {
-
-            String name = nameField.getText();
-            String marksText = marksField.getText();
-
-            if (name.isEmpty() || marksText.isEmpty()) return;
-
-            double marks;
-
-            try {
-                marks = Double.parseDouble(marksText);
-            } catch (NumberFormatException ex) {
-                showAlert("Invalid Input", "Please enter valid numeric marks.");
-                return;
-            }
-
-            if (marks < 0 || marks > 100) {
-                showAlert("Invalid Range", "Marks must be between 0 and 100.");
-                return;
-            }
-
-            String grade;
-            if (marks >= 90) grade = "A";
-            else if (marks >= 75) grade = "B";
-            else if (marks >= 60) grade = "C";
-            else grade = "D";
-
-            if (selectedRow[0] != null) {
-                selectedRow[0].nameProperty().set(name);
-                selectedRow[0].marksProperty().set(marksText);
-                selectedRow[0].gradeProperty().set(grade);
-
-                selectedRow[0] = null;
-                addButton.setText("Add Student");
-
-            } else {
-
-                masterData.add(new StudentRow(name, marksText, grade));
-            }
-
-            updateStats(table, averageLabel, highestLabel, lowestLabel);
-
-            nameField.clear();
-            marksField.clear();
-        });
+        // --- DOUBLE CLICK TO EDIT ---
         table.setRowFactory(tv -> {
             TableRow<StudentRow> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2 && !row.isEmpty()) {
-
-                    StudentRow rowData = row.getItem();
-                    selectedRow[0] = rowData;
-
-                    nameField.setText(rowData.nameProperty().get());
-                    marksField.setText(rowData.marksProperty().get());
-
+                if (event.getClickCount() == 2 && (!row.isEmpty())) {
+                    selectedStudent = row.getItem();
+                    nameField.setText(selectedStudent.nameProperty().get());
+                    dobField.setText(selectedStudent.dobProperty().get());
+                    deptField.setText(selectedStudent.departmentProperty().get());
+                    marksField.setText(selectedStudent.marksProperty().get());
                     addButton.setText("Update Student");
+                    addButton.setStyle("-fx-background-color: #f39c12;");
                 }
             });
             return row;
         });
 
-        deleteButton.setOnAction(e -> {
-            StudentRow selected = table.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                masterData.remove(selected);
-                updateStats(table, averageLabel, highestLabel, lowestLabel);
-            }
+        // --- SEARCH LOGIC ---
+        searchField.textProperty().addListener((obs, old, newVal) -> {
+            filteredData.setPredicate(s -> newVal == null || newVal.isEmpty() ||
+                    s.nameProperty().get().toLowerCase().contains(newVal.toLowerCase()));
         });
 
-        clearAllButton.setOnAction(e -> {
-            masterData.clear();
-            selectedRow[0] = null;
-            addButton.setText("Add Student");
-            nameField.clear();
-            marksField.clear();
-            updateStats(table, averageLabel, highestLabel, lowestLabel);
-        });
-
-        exportButton.setOnAction(e -> {
-
-            if (masterData.isEmpty()) {
-                showAlert("No Data", "There are no students to export.");
+        // --- ADD / UPDATE ACTION ---
+        addButton.setOnAction(e -> {
+            String name = nameField.getText(), dob = dobField.getText(), dept = deptField.getText(), mTxt = marksField.getText();
+            if (name.isEmpty() || mTxt.isEmpty()) {
+                showAlert("Input Required", "Please fill in Name and Marks at least.");
                 return;
             }
+            try {
+                double m = Double.parseDouble(mTxt);
+                String g = (m >= 90) ? "A" : (m >= 75) ? "B" : (m >= 60) ? "C" : "D";
 
-            FileChooser fileChooser = new FileChooser();
-            fileChooser.setTitle("Save Student Data");
-            fileChooser.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("CSV Files", "*.csv")
-            );
-            fileChooser.setInitialFileName("students.csv");
-
-            File file = fileChooser.showSaveDialog(stage);
-
-            if (file == null) {
-                return; // user cancelled
-            }
-
-            try (FileWriter writer = new FileWriter(file)) {
-
-                writer.write("Name,Marks,Grade\n");
-
-                for (StudentRow row : masterData) {
-                    writer.write(
-                            row.nameProperty().get() + "," +
-                                    row.marksProperty().get() + "," +
-                                    row.gradeProperty().get() + "\n"
-                    );
+                if (selectedStudent != null) {
+                    DatabaseHandler.updateStudent(selectedStudent.idProperty().get(), name, dob, dept, mTxt);
+                } else {
+                    DatabaseHandler.addStudent(name, dob, dept, mTxt, g);
                 }
 
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setHeaderText("Export Successful");
-                alert.setContentText("File saved successfully!");
-                alert.showAndWait();
+                // Refresh full list to keep UI and DB IDs in sync
+                masterData.setAll(DatabaseHandler.getAllStudents());
+                updateDashboard(table, avgLabel, highLabel, lowLabel);
 
-            } catch (IOException ex) {
-                showAlert("Error", "Failed to save file.");
+                // Reset UI
+                selectedStudent = null;
+                addButton.setText("Add Student");
+                addButton.setStyle("");
+                nameField.clear(); dobField.clear(); deptField.clear(); marksField.clear();
+                nameField.requestFocus();
+            } catch (Exception ex) { showAlert("Error", "Check your inputs (Marks must be a number)."); }
+        });
+
+        clearFieldsButton.setOnAction(e -> {
+            selectedStudent = null;
+            addButton.setText("Add Student"); addButton.setStyle("");
+            nameField.clear(); dobField.clear(); deptField.clear(); marksField.clear();
+        });
+
+        deleteButton.setOnAction(e -> {
+            StudentRow s = table.getSelectionModel().getSelectedItem();
+            if (s != null) {
+                DatabaseHandler.deleteStudent(s.idProperty().get());
+                masterData.remove(s);
+                updateDashboard(table, avgLabel, highLabel, lowLabel);
             }
         });
 
-        HBox formRow = new HBox(10, nameField, marksField);
-        HBox buttonRow = new HBox(10, addButton, deleteButton, clearAllButton, exportButton);
+        // --- LAYOUT ---
+        HBox inputRow = new HBox(10, nameField, dobField, deptField, marksField);
+        HBox buttonRow = new HBox(10, addButton, clearFieldsButton, deleteButton);
+        HBox contentRow = new HBox(20, table, gradeChart);
+        VBox root = new VBox(20, title, inputRow, buttonRow, searchField, contentRow, new HBox(20, avgLabel, highLabel, lowLabel));
+        root.getStyleClass().add("main-container");
 
-        VBox root = new VBox(20,
-                title,
-                formRow,
-                buttonRow,
-                searchField,
-                table,
-                statsBox);
+        Scene scene = new Scene(root, 1150, 750);
 
-        root.setStyle("-fx-padding: 20;");
+        // --- KEYBOARD SHORTCUT (ENTER KEY) ---
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                addButton.fire();
+                event.consume();
+            }
+        });
 
-        Scene scene = new Scene(root, 700, 500);
+        try { scene.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); } catch (Exception ignored) {}
 
-        stage.setTitle("Student Grade Tracker");
+        updateDashboard(table, avgLabel, highLabel, lowLabel);
+        stage.setTitle("Student Tracker Pro - Final Version");
         stage.setScene(scene);
         stage.show();
     }
 
-    private void updateStats(TableView<StudentRow> table,
-                             Label averageLabel,
-                             Label highestLabel,
-                             Label lowestLabel) {
+    private void updateDashboard(TableView<StudentRow> table, Label avg, Label high, Label low) {
+        double total = 0, h = -1, l = 101;
+        int count = 0, aCount = 0, bCount = 0, cCount = 0, dCount = 0;
 
-        if (table.getItems().isEmpty()) {
-            averageLabel.setText("Average: 0");
-            highestLabel.setText("Highest: 0");
-            lowestLabel.setText("Lowest: 0");
-            return;
+        for (StudentRow s : table.getItems()) {
+            try {
+                double m = Double.parseDouble(s.marksProperty().get());
+                total += m; h = Math.max(h, m); l = Math.min(l, m); count++;
+                String g = s.gradeProperty().get();
+                if (g.equals("A")) aCount++; else if (g.equals("B")) bCount++;
+                else if (g.equals("C")) cCount++; else dCount++;
+            } catch (Exception ignored) {}
         }
+        avg.setText("Avg: " + (count > 0 ? String.format("%.2f", total / count) : "0"));
+        high.setText("High: " + (h == -1 ? "0" : h));
+        low.setText("Low: " + (l == 101 ? "0" : l));
 
-        double total = 0;
-        double highest = Double.MIN_VALUE;
-        double lowest = Double.MAX_VALUE;
-
-        for (StudentRow row : table.getItems()) {
-            double m = Double.parseDouble(row.marksProperty().get());
-            total += m;
-            highest = Math.max(highest, m);
-            lowest = Math.min(lowest, m);
-        }
-
-        double average = total / table.getItems().size();
-
-        averageLabel.setText("Average: " + String.format("%.2f", average));
-        highestLabel.setText("Highest: " + highest);
-        lowestLabel.setText("Lowest: " + lowest);
+        ObservableList<PieChart.Data> pieData = FXCollections.observableArrayList(
+                new PieChart.Data("A", aCount), new PieChart.Data("B", bCount),
+                new PieChart.Data("C", cCount), new PieChart.Data("D", dCount)
+        );
+        gradeChart.setData(pieData);
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setHeaderText(title);
-        alert.setContentText(message);
-        alert.showAndWait();
+    private void showAlert(String t, String m) {
+        Alert a = new Alert(Alert.AlertType.WARNING); a.setHeaderText(t); a.setContentText(m); a.showAndWait();
     }
 
-    public static void main(String[] args) {
-        launch();
-    }
+    public static void main(String[] args) { launch(args); }
 }
