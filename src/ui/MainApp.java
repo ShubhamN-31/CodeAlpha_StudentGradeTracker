@@ -13,6 +13,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import java.util.Optional;
 
 public class MainApp extends Application {
 
@@ -63,6 +64,7 @@ public class MainApp extends Application {
         Button deleteButton = new Button("Delete Selected");
         deleteButton.getStyleClass().add("button-danger");
 
+        // --- DOUBLE CLICK TO EDIT ---
         table.setRowFactory(tv -> {
             TableRow<StudentRow> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -73,25 +75,52 @@ public class MainApp extends Application {
                     deptField.setText(selectedStudent.departmentProperty().get());
                     marksField.setText(selectedStudent.marksProperty().get());
                     addButton.setText("Update Student");
-                    addButton.setStyle("-fx-background-color: #f39c12;");
+                    addButton.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white;");
                 }
             });
             return row;
         });
 
+        // --- SEARCH FILTER ---
         searchField.textProperty().addListener((obs, old, newVal) -> {
             filteredData.setPredicate(s -> newVal == null || newVal.isEmpty() ||
                     s.nameProperty().get().toLowerCase().contains(newVal.toLowerCase()));
+            updateDashboard(table, avgLabel, highLabel, lowLabel);
         });
 
+        // --- CLEAR BUTTON ---
+        clearFieldsButton.setOnAction(e -> {
+            selectedStudent = null;
+            addButton.setText("Add Student");
+            addButton.setStyle("");
+            nameField.clear(); dobField.clear(); deptField.clear(); marksField.clear();
+            nameField.requestFocus();
+        });
+
+        // --- ADD / UPDATE WITH VALIDATION ---
         addButton.setOnAction(e -> {
-            String name = nameField.getText(), dob = dobField.getText(), dept = deptField.getText(), mTxt = marksField.getText();
-            if (name.isEmpty() || mTxt.isEmpty()) {
-                showAlert("Input Required", "Please fill in Name and Marks at least.");
+            String name = nameField.getText().trim();
+            String dob = dobField.getText().trim();
+            String dept = deptField.getText().trim();
+            String mTxt = marksField.getText().trim();
+
+            if (name.isEmpty() || dob.isEmpty() || dept.isEmpty() || mTxt.isEmpty()) {
+                showAlert("Input Error", "All fields are required.");
                 return;
             }
+
+            if (!dob.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                showAlert("Date Error", "Please use YYYY-MM-DD format.");
+                return;
+            }
+
             try {
                 double m = Double.parseDouble(mTxt);
+                if (m < 0 || m > 100) {
+                    showAlert("Range Error", "Marks must be 0-100.");
+                    return;
+                }
+
                 String g = (m >= 90) ? "A" : (m >= 75) ? "B" : (m >= 60) ? "C" : "D";
 
                 if (selectedStudent != null) {
@@ -102,44 +131,39 @@ public class MainApp extends Application {
 
                 masterData.setAll(DatabaseHandler.getAllStudents());
                 updateDashboard(table, avgLabel, highLabel, lowLabel);
+                clearFieldsButton.fire();
 
-                selectedStudent = null;
-                addButton.setText("Add Student");
-                addButton.setStyle("");
-                nameField.clear(); dobField.clear(); deptField.clear(); marksField.clear();
-                nameField.requestFocus();
-            } catch (Exception ex) { showAlert("Error", "Check your inputs (Marks must be a number)."); }
+            } catch (NumberFormatException ex) {
+                showAlert("Format Error", "Marks must be a number.");
+            }
         });
 
-        clearFieldsButton.setOnAction(e -> {
-            selectedStudent = null;
-            addButton.setText("Add Student"); addButton.setStyle("");
-            nameField.clear(); dobField.clear(); deptField.clear(); marksField.clear();
-        });
-
+        // --- DELETE WITH CONFIRMATION ---
         deleteButton.setOnAction(e -> {
             StudentRow s = table.getSelectionModel().getSelectedItem();
             if (s != null) {
-                DatabaseHandler.deleteStudent(s.idProperty().get());
-                masterData.remove(s);
-                updateDashboard(table, avgLabel, highLabel, lowLabel);
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Delete Confirmation");
+                confirm.setHeaderText("Delete " + s.nameProperty().get() + "?");
+                confirm.setContentText("This action cannot be undone.");
+
+                Optional<ButtonType> result = confirm.showAndWait();
+                if (result.isPresent() && result.get() == ButtonType.OK) {
+                    DatabaseHandler.deleteStudent(s.idProperty().get());
+                    masterData.setAll(DatabaseHandler.getAllStudents());
+                    updateDashboard(table, avgLabel, highLabel, lowLabel);
+                }
             }
         });
 
-        HBox inputRow = new HBox(10, nameField, dobField, deptField, marksField);
-        HBox buttonRow = new HBox(10, addButton, clearFieldsButton, deleteButton);
-        HBox contentRow = new HBox(20, table, gradeChart);
-        VBox root = new VBox(20, title, inputRow, buttonRow, searchField, contentRow, new HBox(20, avgLabel, highLabel, lowLabel));
+        VBox root = new VBox(20, title, new HBox(10, nameField, dobField, deptField, marksField),
+                new HBox(10, addButton, clearFieldsButton, deleteButton),
+                searchField, new HBox(20, table, gradeChart),
+                new HBox(20, avgLabel, highLabel, lowLabel));
         root.getStyleClass().add("main-container");
 
         Scene scene = new Scene(root, 1150, 750);
-
-        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
-            if (event.getCode() == KeyCode.ENTER) {
-                addButton.fire();
-                event.consume();
-            }
-        });
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, ev -> { if (ev.getCode() == KeyCode.ENTER) addButton.fire(); });
 
         try { scene.getStylesheets().add(getClass().getResource("style.css").toExternalForm()); } catch (Exception ignored) {}
 
@@ -154,27 +178,26 @@ public class MainApp extends Application {
         int count = 0, aCount = 0, bCount = 0, cCount = 0, dCount = 0;
 
         for (StudentRow s : table.getItems()) {
-            try {
-                double m = Double.parseDouble(s.marksProperty().get());
-                total += m; h = Math.max(h, m); l = Math.min(l, m); count++;
-                String g = s.gradeProperty().get();
-                if (g.equals("A")) aCount++; else if (g.equals("B")) bCount++;
-                else if (g.equals("C")) cCount++; else dCount++;
-            } catch (Exception ignored) {}
+            double m = Double.parseDouble(s.marksProperty().get());
+            total += m; h = Math.max(h, m); l = Math.min(l, m); count++;
+            String g = s.gradeProperty().get();
+            if (g.equals("A")) aCount++; else if (g.equals("B")) bCount++;
+            else if (g.equals("C")) cCount++; else dCount++;
         }
         avg.setText("Avg: " + (count > 0 ? String.format("%.2f", total / count) : "0"));
         high.setText("High: " + (h == -1 ? "0" : h));
         low.setText("Low: " + (l == 101 ? "0" : l));
-
-        ObservableList<PieChart.Data> pieData = FXCollections.observableArrayList(
+        gradeChart.setData(FXCollections.observableArrayList(
                 new PieChart.Data("A", aCount), new PieChart.Data("B", bCount),
-                new PieChart.Data("C", cCount), new PieChart.Data("D", dCount)
-        );
-        gradeChart.setData(pieData);
+                new PieChart.Data("C", cCount), new PieChart.Data("D", dCount)));
     }
 
-    private void showAlert(String t, String m) {
-        Alert a = new Alert(Alert.AlertType.WARNING); a.setHeaderText(t); a.setContentText(m); a.showAndWait();
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     public static void main(String[] args) { launch(args); }
